@@ -1,0 +1,229 @@
+@import "tailwindcss";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/geist/500.css";
+@import "@fontsource/geist/600.css";
+@import "@fontsource/geist/700.css";
+
+@theme {
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: "Geist", "Inter", system-ui, sans-serif;
+
+  --color-forest: #1e3a2b;
+  --color-moss: #2d5a3d;
+  --color-honey: #e8a84c;
+  --color-honey-deep: #c97f1e;
+  --color-cream: #fff9f2;
+  --color-paper: #ffffff;
+  --color-ink: #1a1e1c;
+  --color-muted: #6b726e;
+  --color-line: #ecdfd0;
+  --color-blush: #f6d2cd;
+  --color-mint: #dcefe2;
+  --color-mint-soft: #e9f4ed;
+  --color-peach: #fdf1e2;
+  --color-lilac: #f1edfb;
+  --color-sky: #e4effa;
+  --color-plum: #6b5ca5;
+
+  --radius-card: 22px;
+  --radius-panel: 18px;
+  --ease-out-soft: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-cream font-sans text-ink;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display text-balance;
+    letter-spacing: -0.015em;
+    line-height: 1.15;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Anything that reacts to a click should say so. Anchors are left
+     alone on purpose, since a bare link pointing somewhere is still a
+     link and the browser arrow already reads as "goes somewhere". */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  label:has(> input:not([type="hidden"])),
+  summary {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  :focus-visible {
+    outline: 2.5px solid var(--color-honey-deep);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    @apply bg-mint text-forest;
+  }
+
+  /* thin scrollbars everywhere */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #d9cdb9 transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #d9cdb9;
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #c4b49a;
+  }
+}
+
+@utility shadow-card {
+  box-shadow:
+    0 1px 2px rgba(30, 58, 43, 0.05),
+    0 10px 28px rgba(30, 58, 43, 0.09);
+}
+
+@utility shadow-card-hover {
+  box-shadow:
+    0 2px 4px rgba(30, 58, 43, 0.06),
+    0 18px 40px rgba(30, 58, 43, 0.15);
+}
+
+@utility shadow-panel {
+  box-shadow: 0 18px 44px rgba(30, 58, 43, 0.18);
+}
+
+@utility shadow-fab {
+  box-shadow: 0 6px 20px rgba(30, 58, 43, 0.28);
+}
+
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* One page frame for every route. The mobile extra top padding
+   clears the floating navbar, which is fixed and 66px tall. */
+/* Section headings and their counters step down on phones so the
+   hierarchy survives the smaller column. */
+@utility section-title {
+  @apply font-display text-[1.7rem] max-[560px]:text-[1.3rem];
+}
+
+@utility section-count {
+  @apply tnum text-base text-muted max-[560px]:text-[0.85rem];
+}
+
+@utility page-title-lg {
+  @apply font-display text-[2rem] max-[560px]:text-[1.6rem];
+}
+
+@utility page-shell {
+  @apply mx-auto w-full px-6 pt-14 pb-20 max-[860px]:pt-22 max-[560px]:px-4;
+}
+
+/* Navbar show/hide. Two separate curves on purpose:
+   leaving is quicker and firmer, arriving is softer and slower,
+   which is how a real drawer feels. Transform only, so it stays
+   on the compositor and never stutters. */
+@utility nav-hidden {
+  transform: translateY(calc(-100% - 0.75rem));
+  transition: transform 260ms cubic-bezier(0.4, 0, 1, 1);
+}
+
+@utility nav-shown {
+  transform: translateY(0);
+  transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ---------- animations ---------- */
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-18px);
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-6px);
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(64px);
+    opacity: 0.6;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 14px);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.animate-drop-in {
+  animation: drop-in 420ms var(--ease-out-soft);
+}
+
+.animate-pop-in {
+  transform-origin: top right;
+  animation: pop-in 180ms var(--ease-out-soft);
+}
+
+.animate-sheet-up {
+  animation: sheet-up 340ms var(--ease-drawer);
+}
+
+.animate-toast-in {
+  animation: toast-in 320ms var(--ease-out-soft);
+}
+
+.animate-fade-in {
+  animation: fade-in 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
