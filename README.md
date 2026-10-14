@@ -72,6 +72,55 @@ after approve   -> pet status = adopted
 all apps        -> Rival One:approved | Rival Two:rejected
 ```
 
+## Email notifications
+
+When the shelter approves or rejects an application, the applicant gets an
+email. If one person is approved while others were waiting, those others get a
+rejection too, rather than just finding the pet gone from the list.
+
+Sending goes through the Resend HTTP API on port 443, so there is no SMTP to
+configure and no port for a host to block. That matters: Render's free tier
+blocks outbound traffic on ports 25, 465 and 587, which is every usual SMTP
+port. Using the API side-steps that entirely.
+
+Email is deliberately best effort. A provider outage logs an error and the
+approval still succeeds, because the shelter has already made its decision and
+should not have to undo it because a mail server was down.
+
+```bash
+RESEND_API_KEY=re_xxxxxxxxxxxx
+EMAIL_FROM=PawHome <notifications@yourdomain.com>
+CLIENT_URL=https://your-frontend-url
+```
+
+Without `RESEND_API_KEY` nothing sends and the app logs a warning, so the rest
+of it works fine locally with no account.
+
+### Right now these emails land in spam
+
+Worth knowing before you test it. The config currently sends from Resend's
+shared address, `onboarding@resend.dev`, and Gmail puts those in spam.
+
+That is not a bug and no code change fixes it. Spam filters trust a sender
+when the sender's domain proves itself with SPF and DKIM, and you cannot add
+those records for a domain you do not own. So the mail arrives looking
+unverified, which is what the filter is built to catch.
+
+To fix it properly, verify a domain you own:
+
+1. Resend, Domains, Add Domain. Use a subdomain like `mail.yourdomain.com`.
+2. Resend shows you an SPF and a DKIM record. Paste both into your registrar's
+   DNS zone.
+3. Hit Verify. Usually under 15 minutes.
+4. Point `EMAIL_FROM` at that subdomain, for example
+   `PawHome <notifications@mail.yourdomain.com>`.
+
+No mailbox is needed for this. You are only adding two DNS records, and
+Resend sends the mail. You do not need to buy an email plan or set up an inbox.
+
+Until that is done, the flow works and the mail is delivered, it just needs
+moving out of the spam folder by hand.
+
 ## Tech stack
 
 | Layer | Choice |
@@ -165,6 +214,9 @@ Leave it out when you deploy, hosted environments resolve Atlas fine.
 | `JWT_SECRET` | token signing key, change this before deploying |
 | `JWT_EXPIRES_IN` | how long a token lasts, defaults to 7d |
 | `DNS_SERVERS` | optional, only for the SRV problem described above |
+| `RESEND_API_KEY` | Resend key for approval and rejection emails |
+| `EMAIL_FROM` | the from address those emails send as |
+| `CLIENT_URL` | frontend URL, used for links inside the email |
 | `ADMIN_EMAIL` | admin account created on boot if missing |
 | `ADMIN_PASSWORD` | password for that account |
 
@@ -186,6 +238,7 @@ backend/src/
   middleware/auth.js     needLogin and needAdmin guards
   models/                User, Pet, Application schemas
   routes/                auth, pets, applications
+  services/              mailer (Resend), email templates
   utils/                 JWT signing, regex escaping
   scripts/migrate.js     copy data between databases
 
@@ -253,7 +306,7 @@ There is a ready made Postman collection at `backend/postman_collection.json`.
 | Admin dashboard | `pages/admin/` |
 | JWT with role-based auth | `middleware/auth.js` |
 | Pet photos | by URL, which the brief allows as an alternative to upload |
-| Notifications | Sonner toasts on login, signup, and every admin action |
+| Notifications | Sonner toasts, plus real email on approve and reject |
 | `.env.example` | `backend/` and `frontend/` |
 | API docs | `backend/postman_collection.json`, table above |
 | Responsive UI | mobile filter sheet, floating navbar, layouts that reflow on small screens |
@@ -263,12 +316,9 @@ There is a ready made Postman collection at `backend/postman_collection.json`.
 Pet photos are referenced by URL rather than uploaded. The brief allows either,
 and URLs keep file storage out of the project entirely.
 
-Notifications are toasts, but only on the actions that happen right in front of
-you: logging in, signing up, and every admin change. An applicant who has been
-approved does not get a push or an email. They find out by opening their
-dashboard, where the status is shown on the application itself. Doing it
-properly would mean a notification table and a poll or socket, which felt like
-more than this project needed.
+There are no automated tests. I checked the endpoints by hand instead, including
+the approval cascade with two applicants competing for one pet and the auth
+guards returning 401 and 403, but there is no suite you can rerun.
 
 I did not deploy this. It runs locally against Atlas, which I verified end to
 end, but there is no live link yet.

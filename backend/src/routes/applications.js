@@ -2,6 +2,8 @@ const express = require("express");
 const Application = require("../models/Application");
 const Pet = require("../models/Pet");
 const { needLogin, needAdmin } = require("../middleware/auth");
+const { sendMail } = require("../services/mailer");
+const { TEMPLATES } = require("../services/emailTemplates");
 
 const router = express.Router();
 
@@ -71,24 +73,38 @@ router.put("/:id", needLogin, needAdmin, async (req, res) => {
       .json({ message: "Status must be approved or rejected" });
   }
 
-  const app = await Application.findById(req.params.id).populate("pet");
+  const app = await Application.findById(req.params.id)
+    .populate("pet")
+    .populate("user", "name email");
   if (!app) return res.status(404).json({ message: "Application not found" });
 
   app.status = status;
   await app.save();
 
   const pet = await Pet.findById(app.pet._id || app.pet);
+
+  // Everyone this decision affects, and what it means for them.
+  const notices = [{ to: app.user?.email, status }];
+
   if (pet) {
     if (status === "approved") {
       pet.status = "adopted";
       await pet.save();
-      // reject other pending requests for same pet
-      await Application.updateMany(
-        { pet: pet._id, _id: { $ne: app._id }, status: "pending" },
-        { status: "rejected" },
-      );
+
+      // Everyone else waiting on this pet is out, and deserves to be told
+      // rather than just watching the pet vanish from the list.
+      const losers = await Application.find({ pet: pet._id, _id: { $ne: app._id }, status: "pending" })
+        .populate("user", "name email")
+        .select("user");
+      if (losers.length) {
+        await Application.updateMany(
+          { _id: { $in: losers.map((l) => l._id) } },
+          { status: "rejected" },
+        );
+        losers.forEach((l) => notices.push({ to: l.user?.email, status: "rejected" }));
+      }
     } else {
-      // if no other pending apps left, set pet back to available
+      // Only reopen the pet if nobody else is still waiting.
       const stillPending = await Application.countDocuments({
         pet: pet._id,
         status: "pending",
@@ -100,7 +116,28 @@ router.put("/:id", needLogin, needAdmin, async (req, res) => {
     }
   }
 
+  // Best effort. A mail provider being down must never undo a decision the
+  // shelter has already made and returned.
+  await notify({ notices, pet });
+
   res.json(app);
 });
+
+async function notify({ notices, pet }) {
+  const url = `${process.env.CLIENT_URL || "http://localhost:5173"}/dashboard`;
+  const targets = notices.filter((n) => n.to);
+  const ctx = { petName: pet?.name || "your pet", petPhoto: pet?.photoUrl, dashboardUrl: url };
+
+  const results = await Promise.allSettled(
+    targets.map((n) => sendMail({ to: n.to, ...TEMPLATES[n.status](ctx) })),
+  );
+
+  const failed = results.filter((r) => r.status === "rejected");
+  if (failed.length) {
+    // Log the reason, not just the count, otherwise a misconfigured
+    // provider is impossible to diagnose from the server output.
+    failed.forEach((r) => console.error(`[mail] failed: ${r.reason.message}`));
+  }
+}
 
 module.exports = router;

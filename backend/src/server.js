@@ -5,6 +5,7 @@ const bcrypt = require("bcryptjs");
 const app = require("./app");
 const connectDB = require("./config/db");
 const User = require("./models/User");
+const { describeMailer } = require("./services/mailer");
 
 const PORT = process.env.PORT || 5000;
 
@@ -29,6 +30,7 @@ async function start() {
   const uri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/pet_adoption";
   await connectDB(uri);
   await makeSureAdminExists();
+  console.log(`[mail] transport: ${await describeMailer()}`);
   app.listen(PORT, () =>
     console.log(`Backend running on http://localhost:${PORT}`),
   );
