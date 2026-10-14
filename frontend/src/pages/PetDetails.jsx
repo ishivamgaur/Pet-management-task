@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { ArrowLeft, House, Paw, Cake, Phone, Check } from "reicon-react";
-import { petsApi, appsApi } from "../api";
+import { usePet, useApply } from "../api/queries";
 import { useAuth } from "../context/AuthContext";
 import { petPhoto } from "../components/PetCard";
 import { PetDetailsSkeleton } from "../components/Skeleton";
@@ -18,26 +18,38 @@ const MESSAGE_MAX = 1000;
 // Mirrors the checks in backend/src/routes/applications.js. The server
 // enforces them regardless, this just avoids a pointless round trip and
 // tells the person what is wrong while they are still typing.
-function check({ message, phone, touched }) {
+// Returns null when the form is good. Never a nag, otherwise the
+// disabled submit button could never be enabled in the first place.
+// The field is returned so the message can be shown under the right input.
+function check({ message, phone }) {
   const text = message.trim();
 
-  if (!text) return "Tell the shelter a little about your home";
+  if (!text) return { field: "message", text: "Tell the shelter a little about your home" };
   if (text.length < MESSAGE_MIN) {
-    return `A little more detail helps, ${MESSAGE_MIN - text.length} character${
-      MESSAGE_MIN - text.length === 1 ? "" : "s"
-    } to go`;
+    const left = MESSAGE_MIN - text.length;
+    return {
+      field: "message",
+      text: `A little more detail helps, ${left} character${left === 1 ? "" : "s"} to go`,
+    };
   }
-  if (text.length > MESSAGE_MAX) return `Keep it under ${MESSAGE_MAX} characters`;
+  if (text.length > MESSAGE_MAX) {
+    return { field: "message", text: `Keep it under ${MESSAGE_MAX} characters` };
+  }
 
   const digits = phone.trim();
-  if (digits && !PHONE.test(digits)) return "That phone number does not look right";
+  if (digits && !PHONE.test(digits)) {
+    return { field: "phone", text: "That phone number does not look right" };
+  }
 
-  return touched ? "" : "Please write a short message before sending";
+  return null;
 }
 
 export default function PetDetails() {
   const { id } = useParams();
-  const [pet, setPet] = useState(null);
+  // Served from the listing cache when the pet is already loaded, so
+  // opening one from the grid does not refetch it.
+  const { data: pet } = usePet(id);
+  const apply = useApply();
   const [message, setMessage] = useState("");
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
@@ -46,14 +58,12 @@ export default function PetDetails() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    petsApi.get(id).then((res) => setPet(res.data));
-  }, [id]);
+  const problem = check({ message, phone });
+  const canSubmit = !problem;
+  const messageProblem = problem?.field === "message" ? problem.text : "";
+  const phoneProblem = problem?.field === "phone" ? problem.text : "";
 
-  const problem = check({ message, phone, touched: submitAttempted });
-  const canSubmit = message.trim().length >= MESSAGE_MIN && !problem;
-
-  async function apply(e) {
+  async function onSubmit(e) {
     e.preventDefault();
     if (!user) {
       navigate("/login");
@@ -64,7 +74,7 @@ export default function PetDetails() {
     if (problem) return;
 
     try {
-      await appsApi.apply({ petId: id, message, phone });
+      await apply.mutateAsync({ petId: id, message, phone });
       setSent(true);
       setNote("Application sent! Check your email and your dashboard.");
     } catch (err) {
@@ -126,7 +136,7 @@ export default function PetDetails() {
             </p>
           ) : (
             <form
-              onSubmit={apply}
+              onSubmit={onSubmit}
               className="mt-9 grid gap-4 rounded-panel bg-paper p-6 shadow-card"
             >
               <div>
@@ -145,10 +155,15 @@ export default function PetDetails() {
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="Where can the shelter reach you?"
                   aria-describedby="phone-help"
-                  className={field}
+                  className={`${field} ${phoneProblem ? "border-[#b3352b]" : ""}`}
                 />
-                <span id="phone-help" className="text-[0.8rem] font-normal text-muted">
-                  Only used if they need to reach you about this application.
+                <span
+                  id="phone-help"
+                  className={`text-[0.8rem] font-normal ${
+                    phoneProblem ? "text-[#a02a20]" : "text-muted"
+                  }`}
+                >
+                  {phoneProblem || "Only used if they need to reach you about this application."}
                 </span>
               </label>
 
@@ -171,7 +186,7 @@ export default function PetDetails() {
                     submitAttempted && !canSubmit ? "text-[#a02a20]" : "text-muted"
                   }`}
                 >
-                  <span>{submitAttempted && problem ? problem : "At least 10 characters."}</span>
+                  <span>{messageProblem || "At least 10 characters."}</span>
                   <span className="tnum shrink-0">
                     {message.trim().length}/{MESSAGE_MAX}
                   </span>

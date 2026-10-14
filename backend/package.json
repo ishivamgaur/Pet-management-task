@@ -4,8 +4,8 @@
   "description": "Backend for pet adoption system",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
+    "start": "node init && node src/server.js",
+    "dev": "node init && node --watch src/server.js",
     "seed": "node src/seed.js",
     "migrate": "node src/scripts/migrate.js"
   },

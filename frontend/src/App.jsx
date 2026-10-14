@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import { Paw } from "reicon-react";
 import { Toaster, toast } from "sonner";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
 import Protected from "./components/Protected";
@@ -88,59 +89,76 @@ function Footer() {
   );
 }
 
+// One client for the whole app. React Query owns every piece of data that
+// came from the API, so pages only declare what they want and the cache
+// handles sharing, deduplication and refetching.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Pets and applications can change from another page or another
+      // browser, so re-check on focus rather than trusting stale data.
+      refetchOnWindowFocus: true,
+      staleTime: 30_000,
+      retry: 1,
+    },
+  },
+});
+
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <ScrollToTop />
-        <Navbar />
-        <main>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/pets/:id" element={<PetDetails />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route
-              path="/dashboard"
-              element={
-                <Protected userOnly>
-                  <Dashboard />
-                </Protected>
-              }
-            />
-            <Route
-              path="/admin"
-              element={
-                <Protected adminOnly>
-                  <Admin />
-                </Protected>
-              }
-            />
-            <Route
-              path="/admin/applications"
-              element={
-                <Protected adminOnly>
-                  <ApplicationsAdmin />
-                </Protected>
-              }
-            />
-          </Routes>
-        </main>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <BrowserRouter>
+          <ScrollToTop />
+          <Navbar />
+          <main>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/pets/:id" element={<PetDetails />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route
+                path="/dashboard"
+                element={
+                  <Protected userOnly>
+                    <Dashboard />
+                  </Protected>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <Protected adminOnly>
+                    <Admin />
+                  </Protected>
+                }
+              />
+              <Route
+                path="/admin/applications"
+                element={
+                  <Protected adminOnly>
+                    <ApplicationsAdmin />
+                  </Protected>
+                }
+              />
+            </Routes>
+          </main>
 
-        <Footer />
-      </BrowserRouter>
+          <Footer />
+        </BrowserRouter>
 
-      <Toaster
-        position="bottom-center"
-        toastOptions={{
-          classNames: {
-            toast:
-              "!rounded-full !border-forest !bg-forest !text-white !font-sans !shadow-[0_14px_34px_rgba(30,58,43,0.32)]",
-            description: "!text-white/80",
-          },
-        }}
-      />
-    </AuthProvider>
+        <Toaster
+          position="bottom-center"
+          toastOptions={{
+            classNames: {
+              toast:
+                "!rounded-full !border-forest !bg-forest !text-white !font-sans !shadow-[0_14px_34px_rgba(30,58,43,0.32)]",
+              description: "!text-white/80",
+            },
+          }}
+        />
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
 

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Check, X, Phone } from "reicon-react";
 import { toast } from "sonner";
-import { appsApi, petsApi } from "../../api";
+import { useAllApplications, usePetStats, useDecide } from "../../api/queries";
 import { petPhoto } from "../../components/PetCard";
 import { btnClass } from "../../lib/ui";
 import { StatusTag } from "../../components/StatusBadge";
@@ -17,28 +17,20 @@ const FILTERS = [
 ];
 
 export default function ApplicationsAdmin() {
-  const [apps, setApps] = useState([]);
-  const [petsCount, setPetsCount] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
+  const { data, isPending } = useAllApplications();
+  const { data: stats } = usePetStats();
+  const decide = useDecide();
 
-  useEffect(() => {
-    Promise.all([appsApi.all(), petsApi.stats()]).then(([a, p]) => {
-      setApps(a.data);
-      setPetsCount(p.data.total);
-      setLoading(false);
-    });
-  }, []);
+  const apps = data ?? [];
+  const petsCount = stats?.total ?? 0;
+  const loading = isPending;
 
-  async function refresh() {
-    const a = await appsApi.all();
-    setApps(a.data);
-  }
-
-  async function decide(id, status, petName) {
-    await appsApi.decide(id, status);
+  // The mutation invalidates the caches, so there is nothing to refetch
+  // by hand after a decision.
+  async function onDecide(id, status, petName) {
+    await decide.mutateAsync({ id, status });
     toast.success(status === "approved" ? `${petName} is going home 🏠` : `Request declined`);
-    refresh();
   }
 
   const pendingCount = apps.filter((a) => a.status === "pending").length;
@@ -143,13 +135,13 @@ export default function ApplicationsAdmin() {
               {a.status === "pending" ? (
                 <div className="col-span-full grid grid-cols-2 gap-2 sm:col-start-3 sm:w-auto sm:shrink-0">
                   <button
-                    onClick={() => decide(a._id, "approved", a.pet?.name)}
+                    onClick={() => onDecide(a._id, "approved", a.pet?.name)}
                     className={btnClass({ size: "sm", className: "w-full" })}
                   >
                     <Check size={15} /> Approve
                   </button>
                   <button
-                    onClick={() => decide(a._id, "rejected", a.pet?.name)}
+                    onClick={() => onDecide(a._id, "rejected", a.pet?.name)}
                     className={btnClass({ variant: "ghost", size: "sm", className: "w-full" })}
                   >
                     <X size={15} /> Reject

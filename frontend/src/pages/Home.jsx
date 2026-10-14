@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, ArrowLeft, ArrowRight, Send, House, Filter, X } from "reicon-react";
-import { petsApi } from "../api";
+import { usePets, usePetStats } from "../api/queries";
 import PetCard from "../components/PetCard";
 import { PetGridSkeleton, PET_GRID } from "../components/Skeleton";
 import Select from "../components/Select";
@@ -42,27 +42,52 @@ const steps = [
   },
 ];
 
+const EMPTY_FILTERS = { search: "", species: "", breed: "", maxAge: "", status: "" };
+
 export default function Home() {
-  const [pets, setPets] = useState([]);
-  const [page, setPage] = useState(1);
-  const [pages, setPages] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  // What is typed in the box, kept apart from what has been applied, so
+  // typing does not fire a request per keystroke.
   const [search, setSearch] = useState("");
-  const [species, setSpecies] = useState("");
-  const [breed, setBreed] = useState("");
-  const [maxAge, setMaxAge] = useState("");
-  const [status, setStatus] = useState("");
-  const [breedOptions, setBreedOptions] = useState([]);
-  const [speciesCounts, setSpeciesCounts] = useState({});
+  // The filters actually in effect, which is what the query runs on.
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [page, setPage] = useState(1);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [scrollTick, setScrollTick] = useState(0);
   const sheetRef = useRef(null);
   const drag = useRef({ start: 0, y: 0, time: 0, active: false });
   const closeTimer = useRef(null);
   const mouseDown = useRef(false);
 
-  const hasFilters = search || species || breed || maxAge || status;
-  const activeCount = [species, breed, maxAge, status].filter(Boolean).length;
+  const params = useMemo(() => {
+    const p = { page, limit: PAGE_SIZE };
+    // A blank or whitespace-only box is not a search, it is the absence of
+    // one. Sending it would filter on the empty string and wipe the list.
+    const term = filters.search.trim();
+    if (term) p.search = term;
+    if (filters.species) p.species = filters.species;
+    if (filters.breed) p.breed = filters.breed;
+    if (filters.maxAge) p.maxAge = filters.maxAge;
+    if (filters.status) p.status = filters.status;
+    return p;
+  }, [filters, page]);
+
+  const { data, isPending, isPlaceholderData } = usePets(params);
+  const { data: stats } = usePetStats();
+
+  const pets = data?.pets ?? [];
+  const pages = data?.pages ?? 1;
+  const total = data?.total ?? 0;
+  const breedOptions = stats?.breeds ?? [];
+  const speciesCounts = stats?.species ?? {};
+
+  // True only on a genuine first load. While paging, the previous results
+  // are still on screen so there is nothing to cover with a skeleton.
+  const loading = isPending && !isPlaceholderData;
+
+  const hasFilters = Object.values(filters).some(Boolean);
+  const activeCount = [filters.species, filters.breed, filters.maxAge, filters.status].filter(
+    Boolean
+  ).length;
 
   // Lock the page behind the mobile sheet so pushing
   // the sheet never scrolls the listing underneath.
@@ -73,51 +98,32 @@ export default function Home() {
     };
   }, [filtersOpen]);
 
-  useEffect(() => {
-    load(1);
-    // The breed list and species counts come from an aggregate endpoint,
-    // so the browser is not downloading every pet, descriptions and photo
-    // URLs included, just to fill a dropdown and a row of chips.
-    petsApi.stats().then((res) => {
-      setBreedOptions(res.data.breeds);
-      setSpeciesCounts(res.data.species);
-    });
-    // eslint-disable-next-line
-  }, []);
-
   function scrollToPets() {
     const el = document.getElementById("pets");
     if (!el) return;
     el.scrollIntoView({ behavior: prefersCalm() ? "auto" : "smooth", block: "start" });
   }
 
-  async function load(nextPage = 1, override = {}, scroll = false) {
-    setLoading(true);
-    const f = { search, species, breed, maxAge, status, ...override };
-    const params = { page: nextPage, limit: PAGE_SIZE };
-    // A blank or whitespace-only box is not a search, it is the absence of
-    // one. Sending it would filter on the empty string and wipe the list.
-    const term = (f.search || "").trim();
-    if (term) params.search = term;
-    if (f.species) params.species = f.species;
-    if (f.breed) params.breed = f.breed;
-    if (f.maxAge) params.maxAge = f.maxAge;
-    if (f.status) params.status = f.status;
-    try {
-      const res = await petsApi.list(params);
-      setPets(res.data.pets);
-      setPage(res.data.page);
-      setPages(res.data.pages);
-      setTotal(res.data.total);
-      if (scroll) scrollToPets();
-    } finally {
-      setLoading(false);
-    }
+  // Bumped rather than passed as a boolean so the same filter applied twice
+  // still scrolls, which a boolean would swallow.
+  useEffect(() => {
+    if (scrollTick) scrollToPets();
+  }, [scrollTick]);
+
+  // Any filter change resets to page one and brings the results into view.
+  function apply(patch) {
+    setFilters((f) => ({ ...f, ...patch }));
+    setPage(1);
+    setScrollTick((n) => n + 1);
+  }
+
+  function goToPage(next) {
+    setPage(next);
   }
 
   function onSearch(e) {
     e.preventDefault();
-    load(1, {}, true);
+    apply({ search });
   }
 
   function speciesCount(value) {
@@ -127,11 +133,7 @@ export default function Home() {
 
   function clearAll() {
     setSearch("");
-    setSpecies("");
-    setBreed("");
-    setMaxAge("");
-    setStatus("");
-    load(1, { search: "", species: "", breed: "", maxAge: "", status: "" }, true);
+    apply(EMPTY_FILTERS);
   }
 
   // Slides out before unmounting so dismissals animate too.
@@ -264,13 +266,12 @@ export default function Home() {
                 <button
                   key={t.value}
                   type="button"
-                  aria-pressed={species === t.value}
+                  aria-pressed={filters.species === t.value}
                   onClick={() => {
-                    setSpecies(t.value);
-                    load(1, { species: t.value }, true);
+                    apply({ species: t.value });
                   }}
                   className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-full px-3.5 font-sans text-[0.88rem] font-semibold transition-colors duration-150 max-[560px]:min-h-[34px] max-[560px]:gap-1 max-[560px]:px-2.5 max-[560px]:text-[0.8rem] ${
-                    species === t.value
+                    filters.species === t.value
                       ? "bg-forest text-white"
                       : "text-muted hover:bg-cream hover:text-forest"
                   }`}
@@ -278,7 +279,7 @@ export default function Home() {
                   {t.label}
                   <span
                     className={`tnum rounded-full px-2 py-px text-[0.72rem] font-bold max-[560px]:px-1.5 max-[560px]:text-[0.65rem] ${
-                      species === t.value ? "bg-white/25 text-white" : "bg-mint text-forest"
+                      filters.species === t.value ? "bg-white/25 text-white" : "bg-mint text-forest"
                     }`}
                   >
                     {speciesCount(t.value)}
@@ -390,7 +391,7 @@ export default function Home() {
       {pages > 1 && (
         <div className="mt-16 mb-4 flex flex-wrap items-center justify-center gap-3.5">
           <button
-            onClick={() => load(page - 1)}
+            onClick={() => goToPage(page - 1)}
             disabled={page <= 1}
             aria-label="Previous page"
             className="inline-flex min-h-10 items-center gap-1 rounded-full border-[1.5px] border-line bg-paper px-4 text-sm font-semibold text-forest transition-colors hover:border-forest disabled:pointer-events-none disabled:opacity-40"
@@ -401,7 +402,7 @@ export default function Home() {
             {pageNumbers().map((n) => (
               <button
                 key={n}
-                onClick={() => load(n)}
+                onClick={() => goToPage(n)}
                 aria-label={`Page ${n}`}
                 aria-current={n === page ? "page" : undefined}
                 className={`tnum h-10 min-w-10 rounded-full px-2 text-sm font-semibold transition-colors ${
@@ -415,7 +416,7 @@ export default function Home() {
             ))}
           </div>
           <button
-            onClick={() => load(page + 1)}
+            onClick={() => goToPage(page + 1)}
             disabled={page >= pages}
             aria-label="Next page"
             className="inline-flex min-h-10 items-center gap-1 rounded-full border-[1.5px] border-line bg-paper px-4 text-sm font-semibold text-forest transition-colors hover:border-forest disabled:pointer-events-none disabled:opacity-40"
@@ -467,21 +468,20 @@ export default function Home() {
         <Select
           label="Breed"
           bare
-          value={breed}
+          value={filters.breed}
           placeholder="All breeds"
           options={[
             { value: "", label: "All breeds" },
             ...breedOptions.map((b) => ({ value: b, label: b })),
           ]}
           onPick={(v) => {
-            setBreed(v);
-            load(1, { breed: v }, true);
+            apply({ breed: v });
           }}
         />
         <Select
           label="Age"
           bare
-          value={maxAge}
+          value={filters.maxAge}
           placeholder="Any age"
           options={[
             { value: "", label: "Any age" },
@@ -490,8 +490,7 @@ export default function Home() {
             { value: "7", label: "Under 7 years" },
           ]}
           onPick={(v) => {
-            setMaxAge(v);
-            load(1, { maxAge: v }, true);
+            apply({ maxAge: v });
           }}
         />
         <div className="grid gap-1.5">
@@ -510,13 +509,12 @@ export default function Home() {
               <button
                 key={label}
                 type="button"
-                aria-pressed={status === value}
+                aria-pressed={filters.status === value}
                 onClick={() => {
-                  setStatus(value);
-                  load(1, { status: value }, true);
+                  apply({ status: value });
                 }}
                 className={`min-h-9 flex-1 rounded-lg px-2 text-[0.8rem] font-semibold whitespace-nowrap transition-colors duration-150 ${
-                  status === value ? "bg-forest text-white" : "text-muted hover:text-forest"
+                  filters.status === value ? "bg-forest text-white" : "text-muted hover:text-forest"
                 }`}
               >
                 {label}

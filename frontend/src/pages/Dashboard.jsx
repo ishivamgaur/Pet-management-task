@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Sparkles, FileText, Hourglass, Check, X, Calendar } from "reicon-react";
-import { appsApi } from "../api";
+import { useMyApplications } from "../api/queries";
 import { readJSON, writeJSON } from "../utils/storage";
 import { petPhoto } from "../components/PetCard";
 import { StatGridSkeleton, PetRowListSkeleton, HeadingSkeleton } from "../components/Skeleton";
@@ -29,24 +29,22 @@ function daysAgo(date) {
 }
 
 export default function Dashboard() {
-  const [apps, setApps] = useState([]);
   const [updates, setUpdates] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isPending } = useMyApplications();
 
+  // Anything whose status changed since the last visit is news. Kept out of
+  // the cache on purpose, it is a one-off notice rather than server data.
   useEffect(() => {
-    appsApi
-      .mine()
-      .then((res) => {
-        setApps(res.data);
-        // anything whose status changed since the last visit is "news"
-        const seen = readJSON("seenApps", {});
-        setUpdates(res.data.filter((a) => seen[a._id] && seen[a._id] !== a.status));
-        const next = {};
-        res.data.forEach((a) => (next[a._id] = a.status));
-        writeJSON("seenApps", next);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+    if (!data) return;
+    const seen = readJSON("seenApps", {});
+    setUpdates(data.filter((a) => seen[a._id] && seen[a._id] !== a.status));
+    const next = {};
+    data.forEach((a) => (next[a._id] = a.status));
+    writeJSON("seenApps", next);
+  }, [data]);
+
+  const apps = data ?? [];
+  const loading = isPending;
 
   if (loading)
     return (

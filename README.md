@@ -129,14 +129,25 @@ moving out of the spam folder by hand.
 | Styling | Tailwind CSS v4, Geist for headings, Inter for body |
 | Icons | Reicon |
 | Toasts | Sonner |
+| Server state | TanStack Query |
 | Backend | Node.js, Express 4 |
 | Database | MongoDB with Mongoose, running on Atlas |
 | Auth | JWT + bcrypt, role-based middleware |
 
-I did not pull in Redux or any other store. The logged in user lives in one
-React Context and each page keeps its own data with `useState`, which is plenty
-at this size. Every API call goes through `src/api/index.js`, so if an endpoint
-changes it changes in exactly one place.
+Server data goes through TanStack Query rather than living in `useState`. The
+logged in user is the only genuine client state, and that stays in a plain
+React Context.
+
+That choice buys three things. Pages that need the same thing share one
+request, so the admin requests page no longer re-fetches the pet list the pets
+page already pulled. Opening a pet from the grid paints instantly because the
+detail page reads the listing cache instead of asking again. And approving an
+application invalidates the pets, stats and totals caches in one place, so
+every page that depends on them updates without knowing any of the others
+exist.
+
+`src/api/index.js` still holds every endpoint, `src/api/queries.js` turns them
+into hooks, so a backend change lands in one file.
 
 ## Running it locally
 
@@ -241,8 +252,8 @@ backend/src/
   scripts/migrate.js     copy data between databases
 
 frontend/src/
-  api/client.js          axios instance, attaches the JWT
   api/index.js           every backend call in one place
+  api/queries.js         TanStack Query hooks, caching, invalidation
   context/AuthContext    current user, login, logout
   lib/ui.js              shared button styles and status colours
   components/            Navbar, PetCard, PetRow, StatusBadge, FormField,
