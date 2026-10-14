@@ -148,7 +148,6 @@ Needs Node 18+ and a MongoDB, either local or Atlas.
 cd backend
 cp .env.example .env
 npm install
-npm run seed    # optional, loads 27 demo pets
 npm run dev
 ```
 
@@ -232,7 +231,6 @@ Leave it out when you deploy, hosted environments resolve Atlas fine.
 backend/src/
   app.js                 express app, middleware, route mounting
   server.js              boot, connects the DB, makes sure admin exists
-  seed.js                pulls demo pets from public APIs
   config/db.js           mongoose connection
   config/dns.js          optional DNS override for Atlas
   middleware/auth.js     needLogin and needAdmin guards

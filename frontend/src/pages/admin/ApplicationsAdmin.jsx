@@ -7,6 +7,7 @@ import { btnClass } from "../../lib/ui";
 import { StatusTag } from "../../components/StatusBadge";
 import AdminLayout from "./AdminLayout";
 import { daysAgo } from "../../components/PetRow";
+import { ApplicationListSkeleton } from "../../components/Skeleton";
 
 const FILTERS = [
   ["", "All"],
@@ -18,12 +19,14 @@ const FILTERS = [
 export default function ApplicationsAdmin() {
   const [apps, setApps] = useState([]);
   const [petsCount, setPetsCount] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
 
   useEffect(() => {
-    Promise.all([appsApi.all(), petsApi.list({ limit: 100 })]).then(([a, p]) => {
+    Promise.all([appsApi.all(), petsApi.stats()]).then(([a, p]) => {
       setApps(a.data);
-      setPetsCount(p.data.pets.length);
+      setPetsCount(p.data.total);
+      setLoading(false);
     });
   }, []);
 
@@ -86,7 +89,9 @@ export default function ApplicationsAdmin() {
         )}
       </div>
 
-      {shown.length === 0 ? (
+      {loading ? (
+        <ApplicationListSkeleton />
+      ) : shown.length === 0 ? (
         <div className="py-16 text-center">
           <h2 className="section-title">Nothing to review</h2>
           <p className="mt-2 text-muted">

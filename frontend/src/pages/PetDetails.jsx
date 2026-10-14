@@ -4,11 +4,36 @@ import { ArrowLeft, House, Paw, Cake, Phone, Check } from "reicon-react";
 import { petsApi, appsApi } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { petPhoto } from "../components/PetCard";
+import { PetDetailsSkeleton } from "../components/Skeleton";
 import { ageLabel, genderIcon } from "../utils/pet";
 import { btnClass, statusTone } from "../lib/ui";
 
 const field =
   "min-h-[48px] w-full rounded-xl border-[1.5px] border-line bg-paper px-4 py-2.5 font-sans text-[0.95rem] text-ink outline-none transition-colors focus:border-moss";
+
+const PHONE = /^[+]?[\d\s()-]{7,20}$/;
+const MESSAGE_MIN = 10;
+const MESSAGE_MAX = 1000;
+
+// Mirrors the checks in backend/src/routes/applications.js. The server
+// enforces them regardless, this just avoids a pointless round trip and
+// tells the person what is wrong while they are still typing.
+function check({ message, phone, touched }) {
+  const text = message.trim();
+
+  if (!text) return "Tell the shelter a little about your home";
+  if (text.length < MESSAGE_MIN) {
+    return `A little more detail helps, ${MESSAGE_MIN - text.length} character${
+      MESSAGE_MIN - text.length === 1 ? "" : "s"
+    } to go`;
+  }
+  if (text.length > MESSAGE_MAX) return `Keep it under ${MESSAGE_MAX} characters`;
+
+  const digits = phone.trim();
+  if (digits && !PHONE.test(digits)) return "That phone number does not look right";
+
+  return touched ? "" : "Please write a short message before sending";
+}
 
 export default function PetDetails() {
   const { id } = useParams();
@@ -17,6 +42,7 @@ export default function PetDetails() {
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
   const [sent, setSent] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -24,23 +50,30 @@ export default function PetDetails() {
     petsApi.get(id).then((res) => setPet(res.data));
   }, [id]);
 
+  const problem = check({ message, phone, touched: submitAttempted });
+  const canSubmit = message.trim().length >= MESSAGE_MIN && !problem;
+
   async function apply(e) {
     e.preventDefault();
     if (!user) {
       navigate("/login");
       return;
     }
+
+    setSubmitAttempted(true);
+    if (problem) return;
+
     try {
       await appsApi.apply({ petId: id, message, phone });
       setSent(true);
-      setNote("Application sent! Track it under My applications.");
+      setNote("Application sent! Check your email and your dashboard.");
     } catch (err) {
       setSent(false);
       setNote(err.response?.data?.message || "Could not apply");
     }
   }
 
-  if (!pet) return <p className="page-shell max-w-[1080px]">Loading pet…</p>;
+  if (!pet) return <PetDetailsSkeleton />;
 
   return (
     <div className="page-shell max-w-[1080px]">
@@ -104,13 +137,19 @@ export default function PetDetails() {
               </div>
 
               <label className="grid gap-2 text-[0.88rem] font-semibold">
-                Phone number
+                Phone number <span className="font-normal text-muted">(optional)</span>
                 <input
+                  type="tel"
+                  inputMode="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="Where can the shelter reach you?"
+                  aria-describedby="phone-help"
                   className={field}
                 />
+                <span id="phone-help" className="text-[0.8rem] font-normal text-muted">
+                  Only used if they need to reach you about this application.
+                </span>
               </label>
 
               <label className="grid gap-2 text-[0.88rem] font-semibold">
@@ -119,12 +158,33 @@ export default function PetDetails() {
                   rows={4}
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Tell us about your home, routine, past pets…"
-                  className={`${field} resize-y`}
+                  placeholder="Tell us about your home, your routine, past pets…"
+                  aria-invalid={submitAttempted && !canSubmit}
+                  aria-describedby="message-help"
+                  className={`${field} resize-y ${
+                    submitAttempted && !canSubmit ? "border-[#b3352b]" : ""
+                  }`}
                 />
+                <span
+                  id="message-help"
+                  className={`flex justify-between gap-3 text-[0.8rem] font-normal ${
+                    submitAttempted && !canSubmit ? "text-[#a02a20]" : "text-muted"
+                  }`}
+                >
+                  <span>{submitAttempted && problem ? problem : "At least 10 characters."}</span>
+                  <span className="tnum shrink-0">
+                    {message.trim().length}/{MESSAGE_MAX}
+                  </span>
+                </span>
               </label>
 
-              <button type="submit" className={btnClass({ className: "mt-1 w-full" })}>
+              <button
+                type="submit"
+                disabled={!canSubmit}
+                className={btnClass({
+                  className: `mt-1 w-full ${canSubmit ? "" : "pointer-events-none opacity-45"}`,
+                })}
+              >
                 Send application
               </button>
 

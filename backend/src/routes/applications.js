@@ -7,10 +7,36 @@ const { TEMPLATES } = require("../services/emailTemplates");
 
 const router = express.Router();
 
+const PHONE = /^[+]?[\d\s()-]{7,20}$/;
+const MESSAGE_MIN = 10;
+const MESSAGE_MAX = 1000;
+
+// Client validation is a convenience, not a guarantee, so the same rules
+// live here. Anything the form checks, this also checks.
+function validate({ message, phone }) {
+  const text = (message || "").trim();
+
+  if (!text) return "Tell the shelter a little about your home";
+  if (text.length < MESSAGE_MIN) {
+    return `Please write at least ${MESSAGE_MIN} characters about your home`;
+  }
+  if (text.length > MESSAGE_MAX) {
+    return `Please keep it under ${MESSAGE_MAX} characters`;
+  }
+
+  const digits = (phone || "").trim();
+  if (digits && !PHONE.test(digits)) return "That phone number does not look right";
+
+  return null;
+}
+
 // POST /api/applications  (logged in user applies)
 router.post("/", needLogin, async (req, res) => {
   const { petId, message, phone } = req.body;
   if (!petId) return res.status(400).json({ message: "petId is required" });
+
+  const problem = validate({ message, phone });
+  if (problem) return res.status(400).json({ message: problem });
 
   const pet = await Pet.findById(petId);
   if (!pet) return res.status(404).json({ message: "Pet not found" });
@@ -32,8 +58,8 @@ router.post("/", needLogin, async (req, res) => {
   const app = await Application.create({
     pet: petId,
     user: req.user._id,
-    message: message || "",
-    phone: phone || "",
+    message: message.trim(),
+    phone: (phone || "").trim(),
   });
 
   // mark pet as pending so others know someone applied

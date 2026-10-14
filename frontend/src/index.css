@@ -128,6 +128,24 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Loading placeholder. The sweep is a background-position change rather
+   than a transform, so it never triggers layout or repaints the page.
+
+   Both ends of the gradient have to stay clearly darker than the white
+   cards and the cream page, otherwise the light half of the sweep washes
+   into the surface and the block looks like it has shrunk or vanished. */
+@utility shimmer {
+  background-image: linear-gradient(
+    90deg,
+    #dccdb4 0%,
+    #e9dfcd 45%,
+    #dccdb4 90%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: shimmer-sweep 1.5s linear infinite;
+}
+
 /* One page frame for every route. The mobile extra top padding
    clears the floating navbar, which is fixed and 66px tall. */
 /* Section headings and their counters step down on phones so the
@@ -194,6 +212,15 @@
 @keyframes fade-in {
   from {
     opacity: 0;
+  }
+}
+
+@keyframes shimmer-sweep {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
   }
 }
 

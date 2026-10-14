@@ -9,21 +9,31 @@ const router = express.Router();
 router.get("/", async (req, res) => {
   const { search, species, breed, minAge, maxAge, status } = req.query;
   const page = Math.max(1, parseInt(req.query.page) || 1);
-  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 9));
+  // Cap high enough that the admin desk can fetch the whole shelter in one
+  // call. It used to clamp at 50, which silently truncated the admin list
+  // while total still reported the true count.
+  const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 9));
 
   const where = {};
-  if (species) where.species = new RegExp(`^${escapeRegex(species)}$`, "i");
-  if (breed) where.breed = new RegExp(escapeRegex(breed), "i");
+  // Trim everything. A blank or whitespace-only query means "no filter",
+  // not "match the literal space", otherwise a stray space returns zero
+  // pets and looks like the shelter is empty.
+  const term = (search || "").trim();
+  const kind = (species || "").trim();
+  const type = (breed || "").trim();
+
+  if (kind) where.species = new RegExp(`^${escapeRegex(kind)}$`, "i");
+  if (type) where.breed = new RegExp(escapeRegex(type), "i");
   if (status) where.status = status;
   if (minAge || maxAge) {
     where.age = {};
     if (minAge) where.age.$gte = Number(minAge);
     if (maxAge) where.age.$lte = Number(maxAge);
   }
-  if (search) {
+  if (term) {
     // One shared pattern, so a single escape pass covers all three fields.
-    const term = new RegExp(escapeRegex(search), "i");
-    where.$or = [{ name: term }, { breed: term }, { species: term }];
+    const pattern = new RegExp(escapeRegex(term), "i");
+    where.$or = [{ name: pattern }, { breed: pattern }, { species: pattern }];
   }
 
   const total = await Pet.countDocuments(where);
@@ -33,6 +43,30 @@ router.get("/", async (req, res) => {
     .limit(limit);
 
   res.json({ pets, page, pages: Math.ceil(total / limit) || 1, total });
+});
+
+// GET /api/pets/stats
+// Counts and breed list for the filter UI. The listing page used to pull
+// every pet just to derive these two aggregates, which meant downloading
+// descriptions and photo URLs to render a dropdown and a row of chips.
+// Declared before /:id so the literal path is not captured as an id.
+router.get("/stats", async (req, res) => {
+  const [total, bySpecies, breeds] = await Promise.all([
+    Pet.countDocuments({}),
+    Pet.aggregate([{ $group: { _id: "$species", count: { $sum: 1 } } }]),
+    Pet.distinct("breed"),
+  ]);
+
+  const species = {};
+  bySpecies.forEach((row) => {
+    species[row._id] = row.count;
+  });
+
+  res.json({
+    total,
+    species,
+    breeds: breeds.filter(Boolean).sort((a, b) => a.localeCompare(b)),
+  });
 });
 
 // GET /api/pets/:id

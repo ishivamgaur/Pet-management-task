@@ -22,6 +22,9 @@ export const petsApi = {
   get(id) {
     return client.get(`/pets/${id}`);
   },
+  stats() {
+    return client.get("/pets/stats");
+  },
   create(data) {
     return client.post("/pets", data);
   },

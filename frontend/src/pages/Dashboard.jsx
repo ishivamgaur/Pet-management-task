@@ -4,6 +4,7 @@ import { Sparkles, FileText, Hourglass, Check, X, Calendar } from "reicon-react"
 import { appsApi } from "../api";
 import { readJSON, writeJSON } from "../utils/storage";
 import { petPhoto } from "../components/PetCard";
+import { StatGridSkeleton, PetRowListSkeleton, HeadingSkeleton } from "../components/Skeleton";
 import { btnClass } from "../lib/ui";
 
 const statusMeta = {
@@ -48,7 +49,16 @@ export default function Dashboard() {
   }, []);
 
   if (loading)
-    return <p className="mx-auto max-w-[1080px] px-5 py-8">Loading your applications…</p>;
+    return (
+      <div className="page-shell max-w-[1080px]">
+        <div className="mb-2">
+          <HeadingSkeleton lines={1} />
+        </div>
+        <StatGridSkeleton />
+        <h2 className="mb-4 font-display text-[1.25rem]">All requests</h2>
+        <PetRowListSkeleton />
+      </div>
+    );
 
   const counts = {
     total: apps.length,

@@ -8,6 +8,7 @@ import { btnClass } from "../../lib/ui";
 import { TextField } from "../../components/FormField";
 import { StatusBadge } from "../../components/StatusBadge";
 import AdminLayout from "./AdminLayout";
+import { AdminPetGridSkeleton, ADMIN_PET_GRID } from "../../components/Skeleton";
 
 const blank = {
   name: "",
@@ -26,6 +27,7 @@ const statusList = ["available", "pending", "adopted"];
 export default function PetsAdmin() {
   const [pets, setPets] = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(blank);
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState("");
@@ -35,6 +37,7 @@ export default function PetsAdmin() {
     const [p, a] = await Promise.all([petsApi.list({ limit: 100 }), appsApi.all()]);
     setPets(p.data.pets);
     setPendingCount(a.data.filter((x) => x.status === "pending").length);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -222,10 +225,12 @@ export default function PetsAdmin() {
       </form>
 
       <h2 className="section-title mb-4">All pets</h2>
-      {pets.length === 0 ? (
+      {loading ? (
+        <AdminPetGridSkeleton />
+      ) : pets.length === 0 ? (
         <p className="text-muted">No pets yet. Add the first one above.</p>
       ) : (
-        <div className="grid grid-cols-2 gap-5 max-[760px]:grid-cols-1">
+        <div className={ADMIN_PET_GRID}>
           {pets.map((pet) => (
             <article key={pet._id} className="overflow-hidden rounded-card bg-paper shadow-card">
               <div className="relative">

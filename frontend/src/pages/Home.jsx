@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { Search, ArrowLeft, ArrowRight, Send, House, Filter, X } from "reicon-react";
 import { petsApi } from "../api";
 import PetCard from "../components/PetCard";
+import { PetGridSkeleton, PET_GRID } from "../components/Skeleton";
 import Select from "../components/Select";
 import FilterMenu from "../components/FilterMenu";
 import Magnetic from "../components/Magnetic";
@@ -75,15 +75,12 @@ export default function Home() {
 
   useEffect(() => {
     load(1);
-    // One request fills both the breed list and the species counts.
-    petsApi.list({ limit: 100 }).then((res) => {
-      const names = [...new Set(res.data.pets.map((p) => p.breed).filter(Boolean))].sort();
-      setBreedOptions(names);
-      const counts = {};
-      res.data.pets.forEach((p) => {
-        counts[p.species] = (counts[p.species] || 0) + 1;
-      });
-      setSpeciesCounts(counts);
+    // The breed list and species counts come from an aggregate endpoint,
+    // so the browser is not downloading every pet, descriptions and photo
+    // URLs included, just to fill a dropdown and a row of chips.
+    petsApi.stats().then((res) => {
+      setBreedOptions(res.data.breeds);
+      setSpeciesCounts(res.data.species);
     });
     // eslint-disable-next-line
   }, []);
@@ -98,7 +95,10 @@ export default function Home() {
     setLoading(true);
     const f = { search, species, breed, maxAge, status, ...override };
     const params = { page: nextPage, limit: PAGE_SIZE };
-    if (f.search) params.search = f.search;
+    // A blank or whitespace-only box is not a search, it is the absence of
+    // one. Sending it would filter on the empty string and wipe the list.
+    const term = (f.search || "").trim();
+    if (term) params.search = term;
     if (f.species) params.species = f.species;
     if (f.breed) params.breed = f.breed;
     if (f.maxAge) params.maxAge = f.maxAge;
@@ -365,7 +365,7 @@ export default function Home() {
       </div>
 
       {loading ? (
-        <p className="py-18 text-center text-muted">Fetching pets…</p>
+        <PetGridSkeleton />
       ) : pets.length === 0 ? (
         <div className="py-18 text-center">
           <h2 className="section-title">No pets match that search</h2>
@@ -380,7 +380,7 @@ export default function Home() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-4 gap-6 max-[1100px]:grid-cols-3 max-[860px]:grid-cols-2 max-[560px]:grid-cols-1">
+        <div className={PET_GRID}>
           {pets.map((p) => (
             <PetCard key={p._id} pet={p} />
           ))}
@@ -457,17 +457,6 @@ export default function Home() {
           </Magnetic>
         ))}
       </section>
-
-      <p className="mt-12 mb-0 text-center text-[0.95rem] text-muted">
-        Ready to meet them?{" "}
-        <Link
-          to="/register"
-          className="font-semibold text-forest underline decoration-line underline-offset-4 transition-colors hover:decoration-forest"
-        >
-          Create a free account
-        </Link>{" "}
-        and apply in about a minute.
-      </p>
     </div>
   );
 
