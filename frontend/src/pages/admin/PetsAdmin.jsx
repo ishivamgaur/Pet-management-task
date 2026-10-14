@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Edit, Trash, Plus } from "reicon-react";
 import { toast } from "sonner";
-import { petsApi, appsApi } from "../../api";
+import { usePets, useAllApplications, usePetMutations } from "../../api/queries";
 import { petPhoto } from "../../components/PetCard";
 import { ageLabel } from "../../utils/pet";
 import { btnClass } from "../../lib/ui";
@@ -25,24 +25,22 @@ const speciesList = ["dog", "cat", "rabbit", "bird"];
 const statusList = ["available", "pending", "adopted"];
 
 export default function PetsAdmin() {
-  const [pets, setPets] = useState([]);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(blank);
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function refresh() {
-    const [p, a] = await Promise.all([petsApi.list({ limit: 100 }), appsApi.all()]);
-    setPets(p.data.pets);
-    setPendingCount(a.data.filter((x) => x.status === "pending").length);
-    setLoading(false);
-  }
+  // The whole shelter in one request, plus the applications needed only to
+  // show how many are waiting. Both come from the shared cache, so
+  // bouncing to the requests tab and back costs nothing.
+  const { data: petData, isPending: petsPending } = usePets({ limit: 200 });
+  const { data: apps } = useAllApplications();
 
-  useEffect(() => {
-    refresh();
-  }, []);
+  const pets = petData?.pets ?? [];
+  const pendingCount = (apps ?? []).filter((x) => x.status === "pending").length;
+  const loading = petsPending;
+
+  const { create, update, remove } = usePetMutations();
 
   function set(key, value) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -54,12 +52,11 @@ export default function PetsAdmin() {
     setBusy(true);
     try {
       const payload = { ...form, age: Number(form.age) };
-      if (editing) await petsApi.update(editing, payload);
-      else await petsApi.create(payload);
+      if (editing) await update.mutateAsync({ id: editing, data: payload });
+      else await create.mutateAsync(payload);
       toast.success(editing ? `${form.name} updated` : `${form.name} added to the shelter`);
       setForm(blank);
       setEditing(null);
-      refresh();
     } catch (err) {
       const message = err.response?.data?.message || "Could not save this pet";
       setError(message);
@@ -91,12 +88,11 @@ export default function PetsAdmin() {
     setError("");
   }
 
-  async function remove(pet) {
+  async function onRemove(pet) {
     if (!confirm(`Remove ${pet.name} from the shelter?`)) return;
-    await petsApi.remove(pet._id);
+    await remove.mutateAsync(pet._id);
     if (editing === pet._id) cancelEdit();
     toast.success(`${pet.name} removed`);
-    refresh();
   }
 
   return (
@@ -269,7 +265,7 @@ export default function PetsAdmin() {
                     <Edit size={15} /> Edit
                   </button>
                   <button
-                    onClick={() => remove(pet)}
+                    onClick={() => onRemove(pet)}
                     aria-label={`Remove ${pet.name}`}
                     className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#b3352b] transition-colors hover:bg-[#fbe3e0]"
                   >
