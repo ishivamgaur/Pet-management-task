@@ -1,4 +1,6 @@
 require("dotenv").config();
+require("./config/dns");
+
 const bcrypt = require("bcryptjs");
 const app = require("./app");
 const connectDB = require("./config/db");

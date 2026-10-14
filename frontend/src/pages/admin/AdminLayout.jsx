@@ -17,7 +17,9 @@ export default function AdminLayout({ title, subtitle, tabs, children }) {
               [
                 "inline-flex min-h-11 items-center gap-2 rounded-[14px] px-4",
                 "font-sans text-[0.9rem] font-semibold transition-colors duration-150",
-                isActive ? "bg-forest text-white" : "bg-paper text-forest ring-1 ring-line hover:bg-cream",
+                isActive
+                  ? "bg-forest text-white"
+                  : "bg-paper text-forest ring-1 ring-line hover:bg-cream",
               ].join(" ")
             }
           >

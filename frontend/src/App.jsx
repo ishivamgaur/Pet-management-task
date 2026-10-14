@@ -31,7 +31,12 @@ function Footer() {
     {
       title: "Shelter",
       // The shelter desk is staff-only, so it stays out of the visitor footer.
-      items: admin ? [["Shelter desk", "/admin"], ["Log in", "/login"]] : [["Log in", "/login"]],
+      items: admin
+        ? [
+            ["Shelter desk", "/admin"],
+            ["Log in", "/login"],
+          ]
+        : [["Log in", "/login"]],
     },
   ];
 

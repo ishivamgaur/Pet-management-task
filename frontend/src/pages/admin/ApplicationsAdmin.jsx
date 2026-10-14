@@ -64,7 +64,9 @@ export default function ApplicationsAdmin() {
                 onClick={() => setFilter(value)}
                 aria-pressed={on}
                 className={`tnum inline-flex min-h-9 items-center gap-2 rounded-[10px] px-3.5 text-[0.85rem] font-semibold transition-colors duration-150 ${
-                  on ? "bg-paper text-forest shadow-[0_1px_2px_rgba(30,58,43,0.12)]" : "text-muted hover:text-forest"
+                  on
+                    ? "bg-paper text-forest shadow-[0_1px_2px_rgba(30,58,43,0.12)]"
+                    : "text-muted hover:text-forest"
                 }`}
               >
                 {label}

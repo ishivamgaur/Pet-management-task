@@ -460,7 +460,10 @@ export default function Home() {
 
       <p className="mt-12 mb-0 text-center text-[0.95rem] text-muted">
         Ready to meet them?{" "}
-        <Link to="/register" className="font-semibold text-forest underline decoration-line underline-offset-4 transition-colors hover:decoration-forest">
+        <Link
+          to="/register"
+          className="font-semibold text-forest underline decoration-line underline-offset-4 transition-colors hover:decoration-forest"
+        >
           Create a free account
         </Link>{" "}
         and apply in about a minute.
